@@ -125,7 +125,7 @@
 
     // ==================== GitHub Issues 日志后端 ====================
     const GITHUB_USER = 'Lu3y8';
-    const GITHUB_REPO = 'jx-lop';
+    const GITHUB_REPO = 'JX-3.0.3';   // 正确仓库名
     // Token 已拆分，防止 GitHub 自动扫描
     const GITHUB_TOKEN = 'ghp_5nJE9BrV6uzIYGd' + 'KRWnDhU9x4bzBSU0SDmXz';
 
@@ -157,7 +157,7 @@
         return 'IP获取失败';
     }
 
-    // 发送日志到 GitHub Issues（增强版：keepalive + 10 秒超时）
+    // 发送日志到 GitHub Issues（增强版：自动重试一次）
     async function sendLog(card, msg) {
         let ip = 'IP获取失败';
         try { ip = await getUserIP(); } catch(e) {}
@@ -166,7 +166,7 @@
         const title = `[${now}] 卡密：${card} | IP：${ip}`;
         const body = `## JX端口日志\n\n| 项目 | 内容 |\n|------|------|\n| ⏱ 时间 | ${now} |\n| 👤 卡密 | ${card} |\n| 🌐 IP | ${ip} |\n| 📋 事件 | ${msg} |`;
 
-        try {
+        async function trySend() {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 10000);
             const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/issues`, {
@@ -181,14 +181,29 @@
                 keepalive: true
             });
             clearTimeout(timeout);
+            return res;
+        }
+
+        // 第一次尝试
+        try {
+            let res = await trySend();
             if (res.ok) {
                 alert('✅ 日志记录成功');
-            } else {
-                alert('日志记录失败，请检查网络');
+                return;
             }
-        } catch(e) {
-            alert('日志记录失败，请检查网络');
-        }
+        } catch(e) {}
+
+        // 等 2 秒再试一次
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+            let res = await trySend();
+            if (res.ok) {
+                alert('✅ 日志记录成功（重试成功）');
+                return;
+            }
+        } catch(e) {}
+
+        alert('日志记录失败，请检查网络');
     }
 
     const SAVED_CARD = 'saved_card_hpjy';
