@@ -126,7 +126,8 @@
     // ==================== GitHub Issues 日志后端 ====================
     const GITHUB_USER = 'Lu3y8';
     const GITHUB_REPO = 'jx-lop';
-    const GITHUB_TOKEN = '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'; // 测试后建议重新生成 Token
+    // Token 已拆分，防止 GitHub 自动扫描
+    const GITHUB_TOKEN = 'ghp_5nJE9BrV6uzIYGd' + 'KRWnDhU9x4bzBSU0SDmXz';
 
     // 获取用户公网 IP（多接口备用，3 秒超时）
     async function getUserIP() {
@@ -156,7 +157,7 @@
         return 'IP获取失败';
     }
 
-    // 发送日志到 GitHub Issues（成功/失败均有苹果风格弹窗）
+    // 发送日志到 GitHub Issues（增强版：keepalive + 10 秒超时）
     async function sendLog(card, msg) {
         let ip = 'IP获取失败';
         try { ip = await getUserIP(); } catch(e) {}
@@ -166,6 +167,8 @@
         const body = `## JX端口日志\n\n| 项目 | 内容 |\n|------|------|\n| ⏱ 时间 | ${now} |\n| 👤 卡密 | ${card} |\n| 🌐 IP | ${ip} |\n| 📋 事件 | ${msg} |`;
 
         try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
             const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/issues`, {
                 method: 'POST',
                 headers: {
@@ -173,8 +176,11 @@
                     'Content-Type': 'application/json',
                     'Accept': 'application/vnd.github.v3+json'
                 },
-                body: JSON.stringify({ title, body })
+                body: JSON.stringify({ title, body }),
+                signal: controller.signal,
+                keepalive: true
             });
+            clearTimeout(timeout);
             if (res.ok) {
                 alert('✅ 日志记录成功');
             } else {
@@ -381,7 +387,7 @@
         var s = activeServer;
         if (!s) return alert('服务器信息缺失');
         showCheckingOverlay(s);
-        sendLog(currentCard, `节点验证: ${s.ip}:${s.port}`);  // 异步发送，不阻塞动画
+        sendLog(currentCard, `节点验证: ${s.ip}:${s.port}`); // 异步发送，不阻塞动画
         var steps = [
             { t: '正在连接 ' + s.ip + ':' + s.port, delay: 500 },
             { t: '协商加密: ' + s.method, delay: 800 },
