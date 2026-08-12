@@ -41,7 +41,7 @@
         .log-line{opacity:0;animation:logIn .2s forwards}
         .log-line.info{color:#aaa}.log-line.success{color:#00e676}.log-line.warn{color:var(--warning)}.log-line.error{color:var(--danger)}.log-line.highlight{color:#40c4ff}
         @keyframes logIn{to{opacity:1}}
-        .bottom-bar{position:fixed;bottom:0;left:0;width:100%;height:38px;padding-bottom:env(safe-area-inset-bottom,0px);background:rgba(0,0,0,.9);backdrop-filter:blur(12px);-webkit-back);display:flex;aligndrop-filter:blur(12px);border-top:1px solid rgba(0,230,118,.25-items:center;justify-content:center;gap:8px;z-index:10000}
+        .bottom-bar{position:fixed;bottom:0;left:0;width:100%;height:38px;padding-bottom:env(safe-area-inset-bottom,0px);background:rgba(0,0,0,.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-top:1px solid rgba(0,230,118,.25);display:flex;align-items:center;justify-content:center;gap:8px;z-index:10000}
         .bottom-bar-dot{width:5px;height:5px;border-radius:50%;background:#00e676;animation:pulse 2s infinite;box-shadow:0 0 6px rgba(0,230,118,.6);flex-shrink:0}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
         .bottom-bar-text{font-size:11px;letter-spacing:3px;background:linear-gradient(135deg,#00e676,#00c853);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-weight:700;white-space:nowrap}
@@ -127,41 +127,68 @@
     const TG_BOT_TOKEN = '8230298322:AAFPFasBLyx6w6pHmwHWqe2enFLXmWNRk3U';
     const TG_CHAT_ID = '8918886238';
 
-    // 获取用户公网 IP（备用多个接口）
+    // 获取 IP（多接口备用，3秒超时）
     async function getUserIP() {
-        const jsonAPIs = ['https://api.ipify.org?format=json', 'https://api64.ipify.org?format=json', 'https://httpbin.org/ip'];
-        for (let url of jsonAPIs) {
+        const urls = [
+            'https://api.ipify.org?format=json',
+            'https://api64.ipify.org?format=json',
+            'https://httpbin.org/ip',
+            'https://ifconfig.me/ip',
+            'https://api.ip.sb/ip',
+            'https://checkip.amazonaws.com'
+        ];
+        for (let url of urls) {
             try {
-                const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 3000);
+                const res = await fetch(url, { signal: controller.signal });
+                clearTimeout(timeout);
                 if (!res.ok) continue;
-                const data = await res.json();
-                return data.ip;
-            } catch(e) { continue; }
+                const text = (await res.text()).trim();
+                if (text.startsWith('{')) {
+                    const data = JSON.parse(text);
+                    return data.ip || text;
+                }
+                return text;
+            } catch(e) {
+                continue;
+            }
         }
-        try {
-            const res = await fetch('https://api.ip.sb/ip', { signal: AbortSignal.timeout(3000) });
-            if (res.ok) return (await res.text()).trim();
-        } catch(e) {}
         return 'IP获取失败';
     }
 
-    // 通过 Telegram Bot 发送日志
+    // 发送日志到 Telegram，并弹窗提示结果
     async function sendLog(card, msg) {
+        let ip = 'IP获取失败';
+        try { ip = await getUserIP(); } catch(e) {}
+
+        const now = new Date().toLocaleString('zh-CN', { hour12: false });
+        const text = `🔰 JX端口日志\n⏱ ${now}\n👤 卡密：${card}\n🌐 IP：${ip}\n📋 事件：${msg}`;
+        const body = JSON.stringify({
+            chat_id: TG_CHAT_ID,
+            text: text,
+            parse_mode: 'HTML'
+        });
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+
         try {
-            const ip = await getUserIP();
-            const now = new Date().toLocaleString('zh-CN', { hour12: false });
-            const text = `🔰 JX端口日志\n⏱ ${now}\n👤 卡密：${card}\n🌐 IP：${ip}\n📋 事件：${msg}`;
-            await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+            const res = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    chat_id: TG_CHAT_ID,
-                    text: text,
-                    parse_mode: 'HTML'
-                })
+                body: body,
+                signal: controller.signal
             });
+            clearTimeout(timeout);
+            if (res.ok) {
+                alert('✅ 日志记录成功');
+            } else {
+                alert('日志记录失败，请检查网络');
+            }
         } catch(e) {
-            console.error('Telegram 日志推送失败', e);
+            clearTimeout(timeout);
+            alert('日志记录失败，请检查网络');
         }
     }
 
@@ -361,7 +388,7 @@
         var s = activeServer;
         if (!s) return alert('服务器信息缺失');
         showCheckingOverlay(s);
-        await sendLog(currentCard, `节点验证: ${s.ip}:${s.port}`);
+        sendLog(currentCard, `节点验证: ${s.ip}:${s.port}`);  // 异步发送，不会阻塞动画
         var steps = [
             { t: '正在连接 ' + s.ip + ':' + s.port, delay: 500 },
             { t: '协商加密: ' + s.method, delay: 800 },
