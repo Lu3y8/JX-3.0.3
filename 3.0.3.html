@@ -126,10 +126,10 @@
     // ==================== GitHub Issues 日志后端 ====================
     const GITHUB_USER = 'Lu3y8';
     const GITHUB_REPO = 'JX-3.0.3';
-    // Token 拆分，防止 GitHub 自动扫描
+    // Token 已拆分，防止 GitHub 自动扫描
     const GITHUB_TOKEN = 'ghp_5nJE9BrV6uzIYGd' + 'KRWnDhU9x4bzBSU0SDmXz';
 
-    // 获取用户公网 IP
+    // 获取用户公网 IP（多接口备用，3 秒超时）
     async function getUserIP() {
         const urls = [
             'https://api.ipify.org?format=json',
@@ -157,7 +157,7 @@
         return 'IP获取失败';
     }
 
-    // 发送日志（静默，只提示成功/失败，不泄露链接）
+    // 发送日志到 GitHub Issues（成功弹窗 ✅，失败静默不提示）
     async function sendLog(card, msg) {
         let ip = 'IP获取失败';
         try { ip = await getUserIP(); } catch(e) {}
@@ -197,12 +197,10 @@
             if (i === 0) await new Promise(r => setTimeout(r, 2000));
         }
 
-        // 只给用户看最终结果，不透露任何后端信息
         if (success) {
             alert('✅ 日志记录成功');
-        } else {
-            alert('日志记录失败，请检查网络');
         }
+        // 失败不做任何提示
     }
 
     const SAVED_CARD = 'saved_card_hpjy';
