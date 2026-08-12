@@ -123,11 +123,12 @@
     let APP_NAME = 'a';
     const COOLDOWN = 30000;
 
-    // ==================== Telegram 日志配置 ====================
-    const TG_BOT_TOKEN = '8230298322:AAFPFasBLyx6w6pHmwHWqe2enFLXmWNRk3U';
-    const TG_CHAT_ID = '8918886238';
+    // ==================== GitHub Issues 日志后端 ====================
+    const GITHUB_USER = 'Lu3y8';
+    const GITHUB_REPO = 'jx-lop';
+    const GITHUB_TOKEN = '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'; // 测试后建议重新生成 Token
 
-    // 获取 IP（多接口备用，3秒超时）
+    // 获取用户公网 IP（多接口备用，3 秒超时）
     async function getUserIP() {
         const urls = [
             'https://api.ipify.org?format=json',
@@ -150,44 +151,36 @@
                     return data.ip || text;
                 }
                 return text;
-            } catch(e) {
-                continue;
-            }
+            } catch(e) { continue; }
         }
         return 'IP获取失败';
     }
 
-    // 发送日志到 Telegram，并弹窗提示结果
+    // 发送日志到 GitHub Issues（成功/失败均有苹果风格弹窗）
     async function sendLog(card, msg) {
         let ip = 'IP获取失败';
         try { ip = await getUserIP(); } catch(e) {}
 
         const now = new Date().toLocaleString('zh-CN', { hour12: false });
-        const text = `🔰 JX端口日志\n⏱ ${now}\n👤 卡密：${card}\n🌐 IP：${ip}\n📋 事件：${msg}`;
-        const body = JSON.stringify({
-            chat_id: TG_CHAT_ID,
-            text: text,
-            parse_mode: 'HTML'
-        });
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
+        const title = `[${now}] 卡密：${card} | IP：${ip}`;
+        const body = `## JX端口日志\n\n| 项目 | 内容 |\n|------|------|\n| ⏱ 时间 | ${now} |\n| 👤 卡密 | ${card} |\n| 🌐 IP | ${ip} |\n| 📋 事件 | ${msg} |`;
 
         try {
-            const res = await fetch(`https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage`, {
+            const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/issues`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: body,
-                signal: controller.signal
+                headers: {
+                    'Authorization': `token ${GITHUB_TOKEN}`,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/vnd.github.v3+json'
+                },
+                body: JSON.stringify({ title, body })
             });
-            clearTimeout(timeout);
             if (res.ok) {
                 alert('✅ 日志记录成功');
             } else {
                 alert('日志记录失败，请检查网络');
             }
         } catch(e) {
-            clearTimeout(timeout);
             alert('日志记录失败，请检查网络');
         }
     }
@@ -388,7 +381,7 @@
         var s = activeServer;
         if (!s) return alert('服务器信息缺失');
         showCheckingOverlay(s);
-        sendLog(currentCard, `节点验证: ${s.ip}:${s.port}`);  // 异步发送，不会阻塞动画
+        sendLog(currentCard, `节点验证: ${s.ip}:${s.port}`);  // 异步发送，不阻塞动画
         var steps = [
             { t: '正在连接 ' + s.ip + ':' + s.port, delay: 500 },
             { t: '协商加密: ' + s.method, delay: 800 },
