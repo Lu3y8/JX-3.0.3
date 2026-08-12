@@ -125,7 +125,7 @@
 
     // ==================== GitHub Issues 日志后端 ====================
     const GITHUB_USER = 'Lu3y8';
-    const GITHUB_REPO = 'JX-3.0.3';   // 正确仓库名
+    const GITHUB_REPO = 'JX-3.0.3';
     // Token 已拆分，防止 GitHub 自动扫描
     const GITHUB_TOKEN = 'ghp_5nJE9BrV6uzIYGd' + 'KRWnDhU9x4bzBSU0SDmXz';
 
@@ -157,7 +157,7 @@
         return 'IP获取失败';
     }
 
-    // 发送日志到 GitHub Issues（增强版：自动重试一次）
+    // 发送日志到 GitHub Issues（直接显示 API 返回结果，方便定位问题）
     async function sendLog(card, msg) {
         let ip = 'IP获取失败';
         try { ip = await getUserIP(); } catch(e) {}
@@ -166,9 +166,7 @@
         const title = `[${now}] 卡密：${card} | IP：${ip}`;
         const body = `## JX端口日志\n\n| 项目 | 内容 |\n|------|------|\n| ⏱ 时间 | ${now} |\n| 👤 卡密 | ${card} |\n| 🌐 IP | ${ip} |\n| 📋 事件 | ${msg} |`;
 
-        async function trySend() {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10000);
+        try {
             const res = await fetch(`https://api.github.com/repos/${GITHUB_USER}/${GITHUB_REPO}/issues`, {
                 method: 'POST',
                 headers: {
@@ -176,34 +174,23 @@
                     'Content-Type': 'application/json',
                     'Accept': 'application/vnd.github.v3+json'
                 },
-                body: JSON.stringify({ title, body }),
-                signal: controller.signal,
-                keepalive: true
+                body: JSON.stringify({ title, body })
             });
-            clearTimeout(timeout);
-            return res;
+            const data = await res.json();
+
+            // 弹窗显示完整 API 返回信息
+            if (res.ok) {
+                if (data.html_url) {
+                    alert('✅ 日志已成功创建\n点击链接查看：\n' + data.html_url);
+                } else {
+                    alert('⚠️ API 返回成功但缺少链接\n状态码: ' + res.status + '\n' + JSON.stringify(data, null, 2));
+                }
+            } else {
+                alert('❌ 创建失败\n状态码: ' + res.status + '\n错误: ' + JSON.stringify(data, null, 2));
+            }
+        } catch(e) {
+            alert('网络错误: ' + e.message);
         }
-
-        // 第一次尝试
-        try {
-            let res = await trySend();
-            if (res.ok) {
-                alert('✅ 日志记录成功');
-                return;
-            }
-        } catch(e) {}
-
-        // 等 2 秒再试一次
-        await new Promise(r => setTimeout(r, 2000));
-        try {
-            let res = await trySend();
-            if (res.ok) {
-                alert('✅ 日志记录成功（重试成功）');
-                return;
-            }
-        } catch(e) {}
-
-        alert('日志记录失败，请检查网络');
     }
 
     const SAVED_CARD = 'saved_card_hpjy';
